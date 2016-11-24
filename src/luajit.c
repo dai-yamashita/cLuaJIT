@@ -17,6 +17,11 @@
 #include "lualib.h"
 #include "luajit.h"
 
+/* ----------------------------------------------- */
+#include <windows.h>
+#include "glue.h"
+/* ----------------------------------------------- */
+
 #include "lj_arch.h"
 
 #if LJ_TARGET_POSIX
@@ -553,7 +558,8 @@ static int pmain(lua_State *L)
   return 0;
 }
 
-int main(int argc, char **argv)
+/*int main(int argc, char **argv)*/
+int lua_main(int argc, char **argv)
 {
   int status;
   lua_State *L = lua_open();  /* create state */
@@ -569,3 +575,100 @@ int main(int argc, char **argv)
   return (status || smain.status) ? EXIT_FAILURE : EXIT_SUCCESS;
 }
 
+/* ---------------------------------------------- */
+
+
+/* ---------------------------------------------- */
+
+extern int glue_main(int, char**);
+extern int srlua_main(int, char**);
+
+void delete_last_arg(int argc, char **argv) {
+	// スクリプト.luaの実行スタイル
+	int lst_argi = argc - 1;
+
+	argv[lst_argi][0] = '\0';
+	argv[lst_argi] = NULL;
+}
+
+BOOL check_myself_srlua_type() {
+	// 特別な引数が何もない場合に、-repl相当なのか、srlua相当なのかを判断する。
+	// それは最後にGlueのマークが自分自身についているかどうかで決まる。
+	Glue t;
+//	typedef struct
+//	{
+//		FILE *f;
+//		size_t size;
+//		char buff[512];
+//	} State;
+
+	char name[MAX_PATH];
+	FILE *f = NULL;
+	GetModuleFileName(NULL, name, sizeof(name)) ? name : NULL;
+	f = fopen(name, "rb");
+	if (f) {
+		if (fseek(f, -sizeof(t), SEEK_END) != 0) {
+			fclose(f);
+			return FALSE;
+		}
+		if (fread(&t, sizeof(t), 1, f) != 1) {
+			fclose(f);
+			return FALSE;
+		}
+		fclose(f);
+
+		if (memcmp(t.sig, GLUESIG, GLUELEN) == 0) {
+			return TRUE;
+		}
+	}
+	return FALSE;
+
+}
+
+
+int main(int argc, char **argv) {
+
+	// スクリプト.luaの実行スタイル
+	int lst_argi = argc - 1;
+
+	// 引数がある。
+	if (argc >= 3) {
+
+//		if (strcmp(argv[lst_argi], "-script") == 0) {
+//			delete_last_arg(argc, argv);
+//			return lua_main(lst_argi, argv);
+//		}
+
+		// スクリプトをluac形式で中間バイナリコードにコンパイル
+//		if (strcmp(argv[lst_argi], "-compile") == 0) {
+//			delete_last_arg(argc, argv);
+//			return luac_main(lst_argi, argv);
+//		}
+
+		// スクリプトをexe形式にリンク。コンパイルしたものでも、.lua でも良い。
+		if (strcmp(argv[lst_argi], "-link") == 0) {
+			delete_last_arg(argc, argv);
+			return glue_main(lst_argi, argv);
+
+		}
+
+		// スクリプトをexe形式にリンク。コンパイルしたものでも、.lua でも良い。
+//		if (strcmp(argv[lst_argi], "-bin2c") == 0) {
+//			delete_last_arg(argc, argv);
+//			return bin2c_main(lst_argi, argv);
+//		}
+
+	}
+
+	// 自分自身がsrluaのタイプなら、srluaとして実行
+	if (check_myself_srlua_type()) {
+		// 自分自身のリンク済みファイルを実行するsrluaモード
+		return srlua_main(argc, argv);
+	}
+
+	// それ以外はデフォルトのreplで
+	else {
+		return lua_main(argc, argv);
+	}
+
+}
