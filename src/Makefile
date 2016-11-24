@@ -25,7 +25,9 @@ NODOTABIVER= 51
 # with "make clean", followed by "make" if you change any options.
 #
 # LuaJIT builds as a native 32 or 64 bit binary by default.
-CC= gcc
+#CC= gcc
+# mingw gcc compiler in cygwin
+CC= i686-w64-mingw32-gcc
 #
 # Use this if you want to force a 32 bit build on a 64 bit multilib OS.
 #CC= gcc -m32
@@ -476,7 +478,8 @@ LUAJIT_A= libluajit.a
 LUAJIT_SO= libluajit.so
 LUAJIT_T= luajit
 
-ALL_T= $(LUAJIT_T) $(LUAJIT_A) $(LUAJIT_SO) $(HOST_T)
+#ALL_T= $(LUAJIT_T) $(LUAJIT_A) $(LUAJIT_SO) $(HOST_T)
+ALL_T= $(LUAJIT_T) $(LUAJIT_A) $(HOST_T)
 ALL_HDRGEN= lj_bcdef.h lj_ffdef.h lj_libdef.h lj_recdef.h lj_folddef.h \
 	    host/buildvm_arch.h
 ALL_GEN= $(LJVM_S) $(ALL_HDRGEN) $(LIB_VMDEFP)
@@ -489,8 +492,10 @@ ALL_RM= $(ALL_T) $(ALL_GEN) *.o host/*.o $(WIN_RM)
 
 # Mixed mode defaults.
 TARGET_O= $(LUAJIT_A)
-TARGET_T= $(LUAJIT_T) $(LUAJIT_SO)
-TARGET_DEP= $(LIB_VMDEF) $(LUAJIT_SO)
+#TARGET_T= $(LUAJIT_T) $(LUAJIT_SO)
+TARGET_T= $(LUAJIT_T)
+#TARGET_DEP= $(LIB_VMDEF) $(LUAJIT_SO)
+TARGET_DEP= $(LIB_VMDEF)
 
 ifeq (Windows,$(TARGET_SYS))
   TARGET_DYNCC= $(STATIC_CC)
@@ -506,7 +511,7 @@ ifeq (Windows,$(TARGET_SYS))
   # C modules cannot be loaded, because they bind to lua51.dll.
   ifneq (static,$(BUILDMODE))
     BUILDMODE= dynamic
-    TARGET_XCFLAGS+= -DLUA_BUILD_AS_DLL
+    #TARGET_XCFLAGS+= -DLUA_BUILD_AS_DLL
   endif
 endif
 ifeq (Darwin,$(TARGET_SYS))
@@ -556,6 +561,7 @@ ifeq (iOS,$(TARGET_SYS))
 endif
 endif
 endif
+
 
 Q= @
 E= @echo
@@ -665,19 +671,11 @@ include Makefile.dep
 # Target file rules.
 ##############################################################################
 
-$(LUAJIT_A): $(LJVMCORE_O)
-	$(E) "AR        $@"
-	$(Q)$(TARGET_AR) $@ $(LJVMCORE_O)
-
-# The dependency on _O, but linking with _DYNO is intentional.
-$(LUAJIT_SO): $(LJVMCORE_O)
-	$(E) "DYNLINK   $@"
-	$(Q)$(TARGET_LD) $(TARGET_ASHLDFLAGS) -o $@ $(LJVMCORE_DYNO) $(TARGET_ALIBS)
-	$(Q)$(TARGET_STRIP) $@
-
-$(LUAJIT_T): $(TARGET_O) $(LUAJIT_O) $(TARGET_DEP)
+#$(LUAJIT_T): $(TARGET_O) $(LUAJIT_O) $(TARGET_DEP)
+$(LUAJIT_T): $(LUAJIT_O) $(LJVMCORE_O) $(TARGET_DEP) 
 	$(E) "LINK      $@"
-	$(Q)$(TARGET_LD) $(TARGET_ALDFLAGS) -o $@ $(LUAJIT_O) $(TARGET_O) $(TARGET_ALIBS)
+	#$(Q)$(TARGET_LD) $(TARGET_ALDFLAGS) -o $@ $(LUAJIT_O) $(TARGET_O) $(TARGET_ALIBS)
+	$(Q)$(TARGET_LD) $(TARGET_ALDFLAGS) -o $@ $(LUAJIT_O) $(LJVMCORE_O) $(TARGET_ALIBS)
 	$(Q)$(TARGET_STRIP) $@
 	$(E) "OK        Successfully built LuaJIT"
 
