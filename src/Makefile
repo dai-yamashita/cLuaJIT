@@ -27,7 +27,10 @@ NODOTABIVER= 51
 # LuaJIT builds as a native 32 or 64 bit binary by default.
 #CC= gcc
 # mingw gcc compiler in cygwin
+# 32bit
 CC= i686-w64-mingw32-gcc
+# 64bit
+#CC= x86_64-w64-mingw32-gcc
 #
 # Use this if you want to force a 32 bit build on a 64 bit multilib OS.
 #CC= gcc -m32
@@ -476,7 +479,7 @@ LIB_VMDEFP= $(LIB_VMDEF)
 LUAJIT_O= luajit.o lj_glue.o lj_srlua.o
 LUAJIT_A= libluajit.a
 LUAJIT_SO= libluajit.so
-LUAJIT_T= luajit
+LUAJIT_T= cluajit
 
 #ALL_T= $(LUAJIT_T) $(LUAJIT_A) $(LUAJIT_SO) $(HOST_T)
 ALL_T= $(LUAJIT_T) $(LUAJIT_A) $(HOST_T)
@@ -501,7 +504,7 @@ ifeq (Windows,$(TARGET_SYS))
   TARGET_DYNCC= $(STATIC_CC)
   LJVM_MODE= peobj
   LJVM_BOUT= $(LJVM_O)
-  LUAJIT_T= luajit.exe
+  LUAJIT_T= cluajit.exe
   ifeq (cygwin,$(HOST_MSYS))
     LUAJIT_SO= cyg$(TARGET_DLLNAME)
   else
@@ -671,10 +674,8 @@ include Makefile.dep
 # Target file rules.
 ##############################################################################
 
-#$(LUAJIT_T): $(TARGET_O) $(LUAJIT_O) $(TARGET_DEP)
 $(LUAJIT_T): $(LUAJIT_O) $(LJVMCORE_O) $(TARGET_DEP) 
 	$(E) "LINK      $@"
-	#$(Q)$(TARGET_LD) $(TARGET_ALDFLAGS) -o $@ $(LUAJIT_O) $(TARGET_O) $(TARGET_ALIBS)
 	$(Q)$(TARGET_LD) $(TARGET_ALDFLAGS) -o $@ $(LUAJIT_O) $(LJVMCORE_O) $(TARGET_ALIBS)
 	$(Q)$(TARGET_STRIP) $@
 	$(E) "OK        Successfully built LuaJIT"
