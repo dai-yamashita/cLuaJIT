@@ -2,12 +2,33 @@
 * srlua.c
 * Lua interpreter for self-running programs
 * Luiz Henrique de Figueiredo <lhf@tecgraf.puc-rio.br>
-* 03 Nov 2014 15:31:43
+* 27 Apr 2012 09:24:34
 * This code is hereby placed in the public domain.
 */
 
-#ifdef _WIN32
-#include <windows.h>
+#if defined(_WIN32)
+  #include <windows.h>
+  #define _PATH_MAX MAX_PATH
+#else
+  #define _PATH_MAX PATH_MAX
+#endif
+
+#if defined (__CYGWIN__)
+  #include <sys/cygwin.h>
+#endif
+
+#if defined(__linux__) || defined(__sun)
+  #include <unistd.h> /* readlink */
+#endif
+
+#if defined(__APPLE__)
+  #include <sys/param.h>
+  #include <mach-o/dyld.h>
+#endif
+
+#if defined(__FreeBSD__)
+  #include <sys/types.h>
+  #include <sys/sysctl.h>
 #endif
 
 #include <errno.h>
@@ -19,14 +40,6 @@
 #include "lua.h"
 #include "lualib.h"
 #include "lauxlib.h"
-
-#ifdef _WIN32
-#define alert(progname,message)	MessageBox(NULL,message,progname,MB_ICONERROR | MB_OK)
-#define getprogname()	char name[MAX_PATH]; argv[0]= GetModuleFileName(NULL,name,sizeof(name)) ? name : NULL;
-#else
-#define alert(progname,message)	fprintf(stderr,"%s: %s\n",progname,message)
-#define getprogname()
-#endif
 
 typedef struct
 {
@@ -66,16 +79,22 @@ static void load(lua_State *L, const char *name)
   while (--S.size>0 && c!='\n') c=getc(f);
  else
   ungetc(c,f);
+#if LUA_VERSION_NUM <= 501
  if (lua_load(L,myget,&S,"=")!=0) lua_error(L);
+#else
+ if (lua_load(L,myget,&S,"=",NULL)!=0) lua_error(L);
+#endif
  fclose(f);
 }
 
 static int pmain(lua_State *L)
 {
- int argc=(int)lua_tointeger(L,1);
+ int argc=lua_tointeger(L,1);
  char** argv=lua_touserdata(L,2);
  int i;
+ lua_gc(L,LUA_GCSTOP,0);
  luaL_openlibs(L);
+ lua_gc(L,LUA_GCRESTART,0);
  load(L,argv[0]);
  lua_createtable(L,argc,0);
  for (i=0; i<argc; i++)
@@ -95,14 +114,78 @@ static int pmain(lua_State *L)
 
 static void fatal(const char* progname, const char* message)
 {
- alert(progname,message);
+#ifdef _WIN32
+ MessageBox(NULL,message,progname,MB_ICONERROR | MB_OK);
+#else
+ fprintf(stderr,"%s: %s\n",progname,message);
+#endif
  exit(EXIT_FAILURE);
+}
+
+char* getprog() {
+  int nsize = _PATH_MAX + 1;
+  char* progdir = malloc(nsize * sizeof(char));
+  char *lb;
+  int n = 0;
+#if defined(__CYGWIN__)
+  char win_buff[_PATH_MAX + 1];
+  GetModuleFileNameA(NULL, win_buff, nsize);
+  cygwin_conv_path(CCP_WIN_A_TO_POSIX, win_buff, progdir, nsize);
+  n = strlen(progdir);
+#elif defined(_WIN32)
+  n = GetModuleFileNameA(NULL, progdir, nsize);
+#elif defined(__linux__)
+  n = readlink("/proc/self/exe", progdir, nsize);
+  if (n > 0) progdir[n] = 0;
+#elif defined(__sun)
+  pid_t pid = getpid();
+  char linkname[256];
+  sprintf(linkname, "/proc/%d/path/a.out", pid);
+  n = readlink(linkname, progdir, nsize);
+  if (n > 0) progdir[n] = 0;  
+#elif defined(__FreeBSD__)
+  int mib[4];
+  mib[0] = CTL_KERN;
+  mib[1] = KERN_PROC;
+  mib[2] = KERN_PROC_PATHNAME;
+  mib[3] = -1;
+  size_t cb = nsize;
+  sysctl(mib, 4, progdir, &cb, NULL, 0);
+  n = cb;
+#elif defined(__BSD__)
+  n = readlink("/proc/curproc/file", progdir, nsize);
+  if (n > 0) progdir[n] = 0;
+#elif defined(__APPLE__)
+  uint32_t nsize_apple = nsize;
+  if (_NSGetExecutablePath(progdir, &nsize_apple) == 0)
+    n = strlen(progdir);
+#else
+  // FALLBACK
+  // Use 'lsof' ... should work on most UNIX systems (incl. OSX)
+  // lsof will list open files, this captures the 1st file listed (usually the executable)
+  int pid;
+  FILE* fd;
+  char cmd[80];
+  pid = getpid();
+
+  sprintf(cmd, "lsof -p %d | awk '{if ($5==\"REG\") { print $9 ; exit}}' 2> /dev/null", pid);
+  fd = popen(cmd, "r");
+  n = fread(progdir, 1, nsize, fd);
+  pclose(fd);
+
+  // remove newline
+  if (n > 1) progdir[--n] = '\0';
+#endif
+  if (n == 0 || n == nsize || (lb = strrchr(progdir, (int)LUA_DIRSEP[0])) == NULL)
+    return NULL;
+  return (progdir);
 }
 
 int srlua_main(int argc, char *argv[])
 {
  lua_State *L;
- getprogname();
+ argv[0] = getprog();
+ 
  if (argv[0]==NULL) fatal("srlua","cannot locate this executable");
  L=luaL_newstate();
  if (L==NULL) fatal(argv[0],"not enough memory for state");
