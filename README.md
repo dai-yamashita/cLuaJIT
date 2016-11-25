@@ -1,12 +1,10 @@
 # README for cLuaJIT 2.0.4
 ==========================
 
-forked by [LuaJIT(v2.0.4)](https://github.com/LuaJIT/LuaJIT)
-
+forked by [LuaJIT(v2.0.4)](https://github.com/LuaJIT/LuaJIT)  
 Lua script convert to binary(for LuaJIT version)
-glue code with srlua
-[using to file hosting service](http://webserver2.tecgraf.puc-rio.br/~lhf/ftp/lua/#srlua)(ver 5.1)
-[original possibly](https://github.com/LuaDist/srlua)
+
+glue code with [LuaDist/srlua](https://github.com/LuaDist/srlua)([using to uLua - 秀丸マクロ.net](http://xn--pckzexbx21r8q9b.net/?page=nobu_mod_the_ulua_src))
 
 # usage
 
