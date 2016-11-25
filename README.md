@@ -24,7 +24,7 @@ hello world
 
 # binaries
 
-[Windwos binaries](https://github.com/wordijp/cLuaJIT/releases)
+[Windows binaries](https://github.com/wordijp/cLuaJIT/releases)
 
 # about LuaJIT
 
