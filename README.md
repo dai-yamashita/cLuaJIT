@@ -1,12 +1,16 @@
-# README for cLuaJIT 2.0.4
-==========================
+# README for cLuaJIT 2.0.4u2
+============================
 
 forked by [LuaJIT(v2.0.4)](https://github.com/LuaJIT/LuaJIT)  
 Lua script convert to binary(for LuaJIT version)
 
 glue code with [LuaDist/srlua](https://github.com/LuaDist/srlua)([using to uLua - 秀丸マクロ.net](http://xn--pckzexbx21r8q9b.net/?page=nobu_mod_the_ulua_src))
 
+archive files with [wordijp/cluajitar](https://github.com/wordijp/cluajitar)
+
 # usage
+
+## basic
 
 ```
 $ echo 'print("hello world")' > hello.lua
@@ -20,6 +24,40 @@ hello world
 $ cluajit hello.lua hello.o -link
 $ ./hello.o
 hello world
+```
+
+## archive files
+
+files
+
+```lua
+-- foo.lua
+local m = {}
+function m.say()
+  print("from foo")
+end
+return m
+```
+
+```lua
+-- hello.lua
+local foo = require("foo")
+print("hello world")
+foo.say()
+```
+
+convert and run
+
+```sh
+# first source code is main program
+$ cluajit hello.lua foo.lua hello.o -link
+
+# delete source code
+$ rm hello.lua foo.lua
+
+$ ./hello.o
+hello world
+from foo
 ```
 
 # binaries
