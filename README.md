@@ -1,4 +1,4 @@
-# README for cLuaJIT 2.0.4u2
+# README for cLuaJIT 2.0.4u3
 ============================
 
 forked by [LuaJIT(v2.0.4)](https://github.com/LuaJIT/LuaJIT)  
