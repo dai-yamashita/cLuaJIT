@@ -9,6 +9,8 @@
 #define lib_package_c
 #define LUA_LIB
 
+#include <string.h>
+
 #include "lua.h"
 #include "lauxlib.h"
 #include "lualib.h"
@@ -16,6 +18,9 @@
 #include "lj_obj.h"
 #include "lj_err.h"
 #include "lj_lib.h"
+
+#include "cluajitar_fmt.h"
+#include "cluajitar_srlua.h"
 
 /* ------------------------------------------------------------------------ */
 
@@ -333,6 +338,38 @@ static void loaderror(lua_State *L, const char *filename)
 	     lua_tostring(L, 1), filename, lua_tostring(L, -1));
 }
 
+static int lj_cf_package_loader_preload(lua_State *L)
+{
+  const char *name = luaL_checkstring(L, 1);
+  lua_getfield(L, LUA_ENVIRONINDEX, "preload");
+  if (!lua_istable(L, -1))
+    luaL_error(L, LUA_QL("package.preload") " must be a table");
+  lua_getfield(L, -1, name);
+  if (lua_isnil(L, -1)) {  /* Not found? */
+    const char *bcname = mksymname(L, name, SYMPREFIX_BC);
+    const char *bcdata = ll_bcsym(NULL, bcname);
+    if (bcdata == NULL || luaL_loadbuffer(L, bcdata, ~(size_t)0, name) != 0)
+      lua_pushfstring(L, "\n\tno field package.preload['%s']", name);
+  }
+  return 1;
+}
+
+static int lj_cf_package_loader_cluajitar(lua_State *L)
+{
+  const char *name = luaL_checkstring(L, 1);
+  char file_name[NAMESIZE];
+  strcpy(file_name, name);
+  strcat(file_name, ".lua");
+  if (load_file_cluajitar(L, file_name) < 0) {
+    /* Not found */
+    const char *bcname = mksymname(L, name, SYMPREFIX_BC);
+    const char *bcdata = ll_bcsym(NULL, bcname);
+    if (bcdata == NULL || luaL_loadbuffer(L, bcdata, ~(size_t)0, name) != 0)
+      lua_pushfstring(L, "\n\tnot found cluajitar['%s'] in program", file_name);
+  }
+  return 1;
+}
+
 static int lj_cf_package_loader_lua(lua_State *L)
 {
   const char *filename;
@@ -369,22 +406,6 @@ static int lj_cf_package_loader_croot(lua_State *L)
     lua_pushfstring(L, "\n\tno module " LUA_QS " in file " LUA_QS,
 		    name, filename);
     return 1;  /* function not found */
-  }
-  return 1;
-}
-
-static int lj_cf_package_loader_preload(lua_State *L)
-{
-  const char *name = luaL_checkstring(L, 1);
-  lua_getfield(L, LUA_ENVIRONINDEX, "preload");
-  if (!lua_istable(L, -1))
-    luaL_error(L, LUA_QL("package.preload") " must be a table");
-  lua_getfield(L, -1, name);
-  if (lua_isnil(L, -1)) {  /* Not found? */
-    const char *bcname = mksymname(L, name, SYMPREFIX_BC);
-    const char *bcdata = ll_bcsym(NULL, bcname);
-    if (bcdata == NULL || luaL_loadbuffer(L, bcdata, ~(size_t)0, name) != 0)
-      lua_pushfstring(L, "\n\tno field package.preload['%s']", name);
   }
   return 1;
 }
@@ -561,6 +582,7 @@ static const luaL_Reg package_global[] = {
 static const lua_CFunction package_loaders[] =
 {
   lj_cf_package_loader_preload,
+  lj_cf_package_loader_cluajitar,
   lj_cf_package_loader_lua,
   lj_cf_package_loader_c,
   lj_cf_package_loader_croot,

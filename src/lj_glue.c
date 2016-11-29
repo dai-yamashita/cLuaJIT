@@ -12,6 +12,7 @@
 #include <string.h>
 #include <windows.h>
 #include "glue.h"
+#include "cluajitar_write.h"
 
 static void cannot(const char* what, const char* name)
 {
@@ -40,6 +41,23 @@ static long copy(const char* name, FILE* out, const char* outname)
  return size;
 }
 
+static long archive_and_copy(int argc, char *argv[], FILE* out, const char* outname)
+{
+ /* pick lua code */
+ for (int i = 0; i < argc - 1; ++i) {
+  argv[i] = argv[i + 1];
+ }
+ argv[argc - 2][0] = '\0';
+ argv[argc - 2] = NULL;
+ argc -= 2;
+ 
+ /* archive and copy */
+ long size = cluajitar_write((const char **)argv, argc, out);
+ if (size < 0) cannot("archive", outname);
+ 
+ return size;
+}
+
 int glue_main(int argc, char* argv[])
 {
  char name[MAX_PATH];
@@ -47,20 +65,25 @@ int glue_main(int argc, char* argv[])
  FILE* f;
  if (argc<3)
  {
-  fprintf(stderr,"usage: lua.exe  prog.lua prog.exe -link\n");
+  fprintf(stderr,"usage: lua.exe  prog.lua [prog2.lua prog3.lua ...] prog.exe -link\n");
   return 1;
  }
  GetModuleFileName(NULL, name, sizeof(name));
- if (strcmp(argv[1], argv[2]) == 0) {
-	 cannot("write",argv[1]);
+ for (int i = 2; i < argc - 1; ++i) {
+  if (strcmp(argv[1], argv[i]) == 0) {
+   cannot("write",argv[1]);
+  }
  }
 
- f = fopen(argv[2], "wb");
- if (f==NULL) cannot("open",argv[2]);
- t.size1 = copy(name, f, argv[2]);
- t.size2=copy(argv[1],f,argv[2]);
- t.sig[GLUETYP]= (argv[3]!=NULL) ? argv[3][0] : 'L';
- if (fwrite(&t,sizeof(t),1,f)!=1) cannot("write",argv[2]);
- if (fclose(f)!=0) cannot("close",argv[2]);
+ int lst_argi = argc - 1;
+ const char *out_file = argv[lst_argi];
+
+ f = fopen(out_file, "wb");
+ if (f==NULL) cannot("open",out_file);
+ t.size1 = copy(name, f, out_file);
+ t.size2 = archive_and_copy(argc, argv, f, out_file); /* NOTE : argv is inout */
+ t.sig[GLUETYP]= 'L';
+ if (fwrite(&t,sizeof(t),1,f)!=1) cannot("write",out_file);
+ if (fclose(f)!=0) cannot("close",out_file);
  return 0;
 }

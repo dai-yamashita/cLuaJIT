@@ -41,6 +41,9 @@
 #include "lualib.h"
 #include "lauxlib.h"
 
+#include "cluajitar_fmt.h"
+#include "cluajitar_srlua.h"
+
 typedef struct
 {
  FILE *f;
@@ -62,7 +65,81 @@ static const char *myget(lua_State *L, void *data, size_t *size)
 
 #define cannot(x) luaL_error(L,"cannot %s %s: %s",x,name,strerror(errno))
 
-static void load(lua_State *L, const char *name)
+static int read_cluajitar_internal(State *s, char found_name[NAMESIZE], const char *name, int (*namecmp)(const char*, const char*), lua_State *L, FILE *f)
+{
+ struct cluajitar_header h;
+ if (fread(&h, sizeof(h), 1, f) < 1) cannot("read header");
+ if (strncmp(h.magic, MAGIC_NUMBER, MAGIC_NUMBER_LEN) != 0) cannot("illegal magic number");
+
+ long offset = ftell(f);
+ uint32_t skip_size = 0;
+
+ for (uint32_t i = 0; i < h.file_count; ++i) {
+  struct cluajitar_file_header fh;
+  if (fread(&fh, sizeof(fh), 1, f) < 1) cannot("read file header");
+
+  /* found */
+  if (namecmp(fh.name, name) == 0) {
+   if (fseek(f, offset + (sizeof(fh) * h.file_count) + skip_size, SEEK_SET) != 0) cannot("seek");
+   s->f = f; s->size = (size_t)fh.file_size;
+   strcpy(found_name, fh.name);
+   return 0;
+  }
+
+  skip_size += fh.file_size;
+ }
+
+ return -1;
+}
+
+static int truecmp(const char* _, const char* __) { return 0; }
+static int read_first_from_cluajitar(State *s, char found_name[NAMESIZE], lua_State *L, FILE *f)
+{
+ return read_cluajitar_internal(s, found_name, "first", truecmp, L, f);
+}
+
+static int read_find_from_cluajitar(State *s, const char *find_name, lua_State *L, FILE *f)
+{
+ char dummy[NAMESIZE];
+ return read_cluajitar_internal(s, dummy, find_name, strcmp, L, f);
+}
+
+static char* getprog();
+
+int load_file_cluajitar(lua_State *L, const char *find_name)
+{
+ char *name = getprog();
+ Glue t;
+ State S;
+ FILE *f=fopen(name,"rb");
+ int c;
+ if (f==NULL) cannot("open");
+ if (fseek(f,-sizeof(t),SEEK_END)!=0) cannot("seek");
+ if (fread(&t,sizeof(t),1,f)!=1) cannot("read");
+ if (memcmp(t.sig,GLUESIG,GLUELEN)!=0) return -1;
+ if (fseek(f,t.size1,SEEK_SET)!=0) cannot("seek");
+
+ if (read_find_from_cluajitar(&S, find_name, L, f) < 0) {
+  fclose(f);
+  free(name);
+  return -1;
+ }
+ c=getc(f);
+ if (c=='#')
+  while (--S.size>0 && c!='\n') c=getc(f);
+ else
+  ungetc(c,f);
+#if LUA_VERSION_NUM <= 501
+ int status = lua_load(L,myget,&S,find_name);
+#else
+ int status = lua_load(L,myget,&S,find_name,NULL);
+#endif
+ fclose(f);
+ free(name);
+ return (status == 0) ? 0 : -1;
+}
+
+static void load_main(lua_State *L, const char *name)
 {
  Glue t;
  State S;
@@ -73,16 +150,18 @@ static void load(lua_State *L, const char *name)
  if (fread(&t,sizeof(t),1,f)!=1) cannot("read");
  if (memcmp(t.sig,GLUESIG,GLUELEN)!=0) luaL_error(L,"no Lua program found in %s",name);
  if (fseek(f,t.size1,SEEK_SET)!=0) cannot("seek");
- S.f=f; S.size=t.size2;
+
+ char main_src[NAMESIZE];
+ if (read_first_from_cluajitar(&S, main_src, L, f) < 0) cannot("main program"); /* find first program from cluajitar(first is main program) */
  c=getc(f);
  if (c=='#')
   while (--S.size>0 && c!='\n') c=getc(f);
  else
   ungetc(c,f);
 #if LUA_VERSION_NUM <= 501
- if (lua_load(L,myget,&S,"=")!=0) lua_error(L);
+ if (lua_load(L,myget,&S,main_src)!=0) lua_error(L);
 #else
- if (lua_load(L,myget,&S,"=",NULL)!=0) lua_error(L);
+ if (lua_load(L,myget,&S,main_src,NULL)!=0) lua_error(L);
 #endif
  fclose(f);
 }
@@ -95,7 +174,7 @@ static int pmain(lua_State *L)
  lua_gc(L,LUA_GCSTOP,0);
  luaL_openlibs(L);
  lua_gc(L,LUA_GCRESTART,0);
- load(L,argv[0]);
+ load_main(L,argv[0]);
  lua_createtable(L,argc,0);
  for (i=0; i<argc; i++)
  {
@@ -122,7 +201,7 @@ static void fatal(const char* progname, const char* message)
  exit(EXIT_FAILURE);
 }
 
-char* getprog() {
+static char* getprog() {
   int nsize = _PATH_MAX + 1;
   char* progdir = malloc(nsize * sizeof(char));
   char *lb;
@@ -142,7 +221,7 @@ char* getprog() {
   char linkname[256];
   sprintf(linkname, "/proc/%d/path/a.out", pid);
   n = readlink(linkname, progdir, nsize);
-  if (n > 0) progdir[n] = 0;  
+  if (n > 0) progdir[n] = 0;
 #elif defined(__FreeBSD__)
   int mib[4];
   mib[0] = CTL_KERN;
@@ -185,7 +264,7 @@ int srlua_main(int argc, char *argv[])
 {
  lua_State *L;
  argv[0] = getprog();
- 
+
  if (argv[0]==NULL) fatal("srlua","cannot locate this executable");
  L=luaL_newstate();
  if (L==NULL) fatal(argv[0],"not enough memory for state");
