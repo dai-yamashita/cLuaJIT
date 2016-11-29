@@ -116,14 +116,10 @@ int load_file_cluajitar(lua_State *L, const char *find_name)
  if (f==NULL) cannot("open");
  if (fseek(f,-sizeof(t),SEEK_END)!=0) cannot("seek");
  if (fread(&t,sizeof(t),1,f)!=1) cannot("read");
- if (memcmp(t.sig,GLUESIG,GLUELEN)!=0) return -1;
+ if (memcmp(t.sig,GLUESIG,GLUELEN)!=0) goto on_error;
  if (fseek(f,t.size1,SEEK_SET)!=0) cannot("seek");
 
- if (read_find_from_cluajitar(&S, find_name, L, f) < 0) {
-  fclose(f);
-  free(name);
-  return -1;
- }
+ if (read_find_from_cluajitar(&S, find_name, L, f) < 0) goto on_error;
  c=getc(f);
  if (c=='#')
   while (--S.size>0 && c!='\n') c=getc(f);
@@ -137,6 +133,11 @@ int load_file_cluajitar(lua_State *L, const char *find_name)
  fclose(f);
  free(name);
  return (status == 0) ? 0 : -1;
+
+on_error:
+ fclose(f);
+ free(name);
+ return -1;
 }
 
 static void load_main(lua_State *L, const char *name)
