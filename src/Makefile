@@ -476,7 +476,7 @@ LJVMCORE_DYNO= $(LJVMCORE_O:.o=_dyn.o)
 LIB_VMDEF= jit/vmdef.lua
 LIB_VMDEFP= $(LIB_VMDEF)
 
-LUAJIT_O= luajit.o lj_glue.o lj_srlua.o lj_cluajitar_load.o lj_cluajitar_write.o
+LUAJIT_O= luajit.o lj_glue.o lj_srlua.o lj_cluajitar_write.o
 LUAJIT_A= libluajit.a
 LUAJIT_SO= libluajit.so
 LUAJIT_T= cluajit

@@ -12,7 +12,7 @@
 #include <string.h>
 #include <windows.h>
 #include "glue.h"
-#include "cluajitar.h"
+#include "cluajitar_write.h"
 
 static void cannot(const char* what, const char* name)
 {

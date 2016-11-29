@@ -24,6 +24,7 @@ struct cluajitar_file_header
 
 /* ---------- */
 
+#if 0
 struct cluajitar_header_content
 {
 	struct cluajitar_header header;
@@ -32,5 +33,6 @@ struct cluajitar_header_content
 	uint32_t *file_offset_list;
 	/* NOTE : count = cluajitar_header.file_count */
 };
+#endif
 
 #endif /*_CLUAJITAR_FMT_H*/
